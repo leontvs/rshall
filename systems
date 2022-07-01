@@ -1,0 +1,10 @@
+#Hostname	OS	Hardware	Loc	Comments	SSH?
+#--------	--	--------	---	--------	----
+linux1		Red Hat Linux 7.1	Dell PowerEdge 1550	SEA	server,dns	y
+linux3		SUSE Linux 9		IBM p5 570		NYC	server		y
+mac1		Mac OS X 10.2.5		Apple PowerMac G4	2NW	client		y
+mac2		Mac OS X 10.4.3		Apple PowerBook G4	mobile	client		y
+solaris1	Solaris 7		Sun Ultra 5		DC1	NULL		NULL
+solaris2	Solaris 8		Sun Enterprise 6500	DC2	server		y
+solaris3	Solaris 9		Dell Precision WS	NULL	NULL		y
+nas1		Data OnTAP 6.1.2R3	NetApp F740		DC1	server		n

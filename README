@@ -1,0 +1,342 @@
+README FOR rshall 14.3
+----------------------
+rshall lets you run commands on multiple remote hosts simultaneously. (The name
+is a throwback to when rsh was a viable remote execution mechanism, as it was
+when rshall was first written. SSH is highly recommended in its place now.)
+
+rshall is fast, performing operations in parallel. Command output is printed to
+standard output as it's received, separated by hostname.
+
+Also included is a tool named cpall, based on the same code, that copies files
+and directories to multiple hosts in parallel.
+
+Finally, a tool named sqall lets you run parallel SQL commands against multiple
+MySQL databases.
+
+
+INSTALLATION
+------------
+In the Makefile, set INST_ROOT to wherever you want the software installed. You
+may also need to change the INSTALL command, depending on the location and
+version of "install" on your system.
+
+In addition, rshall.pl contains hard-coded paths for the default config file,
+and for ssh/rsh/sudo/... binaries. (I know, I know.) You may need to change the
+settings of the $hostFile and $fooCmd variables in the globals section near the
+top of the file.
+
+Then run "make install", and populate your systems file, or create an rshall_ext
+script to extract data from an existing source.
+
+
+USE
+---
+Host Data
+---------
+Unless "rshall_ext" or "readinfo" exist in the same directory as rshall, it
+obtains the list of hostnames from a flat text file that you set up. By default
+this is called "/usr/local/etc/systems", but you can use a different file with
+the "-f" option. An example file is included. On each line, it specifies a
+hostname, OS, hardware model, location, arbitrary comments, and a flag to
+indicate the use of rsh (instead of ssh). (Prior to version 13.0, if no value
+was given for the rsh/ssh flag, rshall defaulted to using rsh. Now it defaults
+to ssh. You don't need a value in that last field if you mean to use SSH, which
+is the most common case today.)
+
+Version 11.0 of rshall reintroduced support for an external tool named readinfo
+to read data from the systems file. readinfo is distributed from the same site
+as rshall, and if the readinfo executable exists in the same directory as
+rshall, it will be used to process the systems file. This provides a few
+advantages: fields in the systems file can be added or rearranged to suit your
+needs and esthetic preferences without impacting the function of rshall, and
+prefixes and suffixes can be used to avoid needless repetition. A sample systems
+file formatted for use with readinfo is included with this distribution. For
+more information, see the README and the man page that comes with readinfo.
+
+Version 12.0 introduced a mechanism to extract the list of hosts from an
+arbitrary data source, such as a flat file, a SQL database, or an LDAP server.
+If an executable named rshall_ext exists in the same directory as rshall, it
+will use that in preference to readinfo or a direct read of the default systems
+file. You write rshall_ext to gather the host data any way you need, and return it
+to rshall in a format it can use. The rshall_ext API is simple:
+
+	1) Return a list containing the following fields: hostname, OS,
+		hardware, location, comments, and a flag ("y" or "n") indicating
+		the use of ssh vs. rsh.
+	2) The list items must be delimited by newlines.
+	3) The field items must be delimited by tabs (single or multiple doesn't
+		matter), with no tabs within field items.
+	3) Field items must be non-null. If your data source returns a null
+		value, it's up to rshall_ext to check for that and insert a
+		non-null value (like "?" or the string "NULL").
+	4) The list, and nothing else, must be printed to STDOUT.
+
+Two example rshall_ext scripts are delivered with this package. One is a shell
+script that simply calls readinfo, and is equivalent to having rshall call
+readinfo itself. The other is a Perl script that shows how to extract host data
+from a MySQL database.
+
+Usage
+-----
+"rshall -h" will print out a usage statement. Basically, the usage is:
+
+	rshall [-f filename] [match_options]...
+		[-t timeout] [-n max_conns] [-r]
+		[-1 | -F base_path] [[-D | -L] max_lines] command
+
+You don't need to quote the command argument to deal with spaces, although you
+do if you're using shell metacharacters (semicolon, pipe, angle brackets, etc.).
+Usually, single-quoting the entire command string works. For example:
+
+% rshall '/bin/echo nameserver 12.34.56.78 >> /etc/resolv.conf; cat /etc/resolv.conf'
+
+rshall attempts to automatically escape metacharacters for you, but if you
+encounter a situation where you have to backslash-escape the characters
+yourself, please let me know.
+
+Match options are used to restrict the hosts on which the specified command will
+run, usually by operating system so that you can run OS-specific commands. The
+arguments to those options are used in case-insensitive substring matches.
+
+The "-t" option specifies an SSH connection timeout, which defaults to 10
+seconds. The "-n" option specifies a limit on the number of simultaneous
+connections, which is unlimited by default. Setting the limit to 1 serializes
+the connection attempts, so that rshall proceeds to connect to each host by the
+order given in the systems file, rather than making parallel connections and
+printing output when each host delivers it.
+
+The "-r" flag causes remote connections to be attempted as root, and works by
+using sudo. If you don't have sudo installed on your system, you can run rshall
+directly as root. (You could also just run "sudo rshall ...". The "-r" flag is
+from an alternate version of rshall that called an external program to retrieve
+hostnames from LDAP, which would barf when run as root due to LDAP access
+controls. It seemed useful, so I left it in.)
+
+The "-1" flag produces compact output, which is especially useful when running
+commands that generate single-line output. If that's the case, you end up with
+one line of output per host, with the hostname at the beginning of each line,
+making it easier to postprocess by running through pipes or the like. As an
+example, you could find out which of your hosts has been up the longest like
+this:
+
+% rshall -1 uptime | grep day | sort -rn +3 | head
+host3:  16:29:34 up 588 days,  4:37,  0 users,  load average: 0.00, 0.00, 0.00
+host4:  16:29:34 up 585 days,  3:38,  0 users,  load average: 1.82, 1.89, 1.86
+host2:  16:29:34 up 575 days,  6:14,  0 users,  load average: 0.00, 0.00, 0.00
+host6:  16:29:35 up 572 days,  5:55,  0 users,  load average: 0.31, 0.21, 0.12
+
+Contrast with the default output format:
+
+% rshall uptime
+##### host1 #####
+ 16:32:55 up 569 days, 14:52,  0 users,  load average: 0.58, 0.42, 0.37
+
+##### host7 #####
+ 16:32:55 up 497 days,  7:35,  0 users,  load average: 0.43, 0.44, 0.38
+
+##### host5 #####
+ 16:32:55 up 354 days,  5:29,  0 users,  load average: 0.38, 0.35, 0.29
+
+##### host8 #####
+ 16:32:55 up 261 days, 23:56,  0 users,  load average: 0.69, 0.42, 0.31
+
+
+The "-F" option dumps output to a set of files named by remote host, instead of
+to standard output. This can be useful in a number of situations; for example,
+when patching a bunch of Solaris hosts, it's easier to review the output when
+it's in individual files named by host, instead of run all together in standard
+output. The following command runs patchadd on all hosts with the "patch"
+comment, and dumps the patchadd output to files named /tmp/patch_out/<hostname>:
+
+% rshall -c patch -F /tmp/patch_out/ patchadd -M /tmp/patches 123456-01 ...
+
+The "-D" option allows you to highlight differences between hosts. You specify
+the maximum number of common lines you'd like to see; any lines of command
+output that appear more frequently than this are discarded from the rshall
+output. For instance, if you were to run this command:
+
+% rshall -w site1 cat /etc/passwd
+
+you'll see the full /etc/passwd file from all hosts at site1. However, if you
+use something like the following, you'll only see the /etc/passwd lines that
+don't show up on more than 5 hosts, which highlights the hosts with lines that
+don't match the others:
+
+% rshall -w site1 -D 5 cat /etc/passwd
+
+Of course, for this to work, rshall needs to get the output from all hosts up
+front in order to compare them, so you won't get output right away as normal for
+rshall. Depending on the number of hosts and their response times, it may take
+quite a while before you see the results.
+
+The "-L" option is similar to "-D", except that the output is organized by line
+rather than by host; each line is printed with a header, followed by a list of
+hosts containing that line in their command output. For instance, here's an
+alternate way to view uptime on your hosts using compact ("-1") format:
+
+% rshall -L 200 -1 'uptime | grep days | cut -d" " -f2' | sort -rn
+589:      host1 host3 host6 host8 host9 host10 host12 host13 host18 host21 host22 host27 host101 host102 host103 host104
+585:      host24
+529:      host117 host118 host120
+501:      host11
+
+List Mode
+---------
+rshall can also run in list mode, in which it doesn't attempt remote
+connections:
+
+	rshall [-f filename] [match_options]... -l [-v]
+
+Using "-l" prints the list of hosts that fit the criteria given by the match
+options. This lets you see which hosts will be affected without actually running
+a command on them, and may also be useful as input to some other tool that takes
+a list of hosts. Using "-v" prints not just the hostnames, but all the info for
+each host in the systems file, which can be helpful in refining the match
+options to use.
+
+Tips
+----
+The match options are used in Perl regular expressions, so with proper quoting,
+you can use Perl regex syntax to make complex matches. For example, using the
+sample systems file that comes with this program:
+
+% rshall -lv -m 'sun|apple'
+mac1		Mac OS X 10.2.5	Apple PowerMac G4	client		y
+solaris1	Solaris 7	Sun Ultra 5		X
+solaris2	Solaris 8	Sun Enterprise 6500	server		y
+
+For rshall to be useful, you need to set up passwordless access to the target
+systems, either as the user executing rshall, or as root if you use the "-r"
+flag.
+
+Depending on the command you're running and on the status of the remote hosts,
+you may get a lot of output really fast, then wait a few seconds for some slow
+responses, and then wait a bit more while connections to unreachable hosts time
+out (which can take a long time with rsh). You can always use Ctrl-C to
+interrupt rshall.
+
+The exit code for rshall is the last non-zero exit code of a command run on a
+remote system, or zero if all remote commands returned successfully.
+
+cpall
+-----
+cpall makes use of the same codebase as rshall; in fact, cpall is just a symlink
+to rshall, which modifies its behavior when called by the name "cpall". It uses
+the same set of options as rshall, and processes the same config files, but
+interprets its arguments differently. Instead of taking a command line as an
+argument, it takes a list of pathnames. If only one pathname is given, that file
+or directory is copied from the local host to the same location in the directory
+hierarchy of each remote host. If more than one pathname is given, the final
+argument determines the destination on each remote host, while the others
+specify source files and directories to be copied from the local system. For
+example:
+
+% cpall /etc/motd
+
+copies /etc/motd from the local host to all others, while:
+
+% cpall -s 'solaris 8' -m sun 108528-29.zip 108993-32.zip /tmp
+
+copies the two named patch files to /tmp on all Solaris 8 SPARC hosts.
+
+sqall
+-----
+Like cpall, sqall is another symlink that causes rshall to change its behavior
+slightly. When invoked as sqall, instead of using ssh or rsh to run commands on
+remote hosts, it uses the mysql executable to run SQL commands on remote
+database servers. This feature was introduced in version 13.0, and is still
+somewhat experimental.
+
+sqall uses the same options and host data sources as rshall. Instead of a UNIX
+command line, you provide a SQL command:
+
+% sqall -c db show databases
+
+% sqall -c db "show slave status\G"
+
+% sqall -c db -1 "select count('*') from db.table"
+
+% sqall -c db -1 "select * from db.table where col1 = 'foo' and col2 != 'bar' limit 1"
+
+Make sure you have a valid username and password set up in ~/.my.cnf, like so:
+
+[mysql]
+user=username
+password=password
+
+
+PLATFORMS
+---------
+rshall has been written for portability to most UNIX systems. It's been tested
+on the following platforms:
+
+	- AIX
+		- versions 3.x, 4.x
+
+	- Darwin/Mac OS X
+		- versions 6.x/10.2.x through 7.x/10.3.x
+
+	- DYNIX/ptx
+
+	- HP-UX
+		- versions 10.20 through 11.11
+
+	- Linux
+		- Ubuntu versions 8.04 through 14.04
+		- Red Hat Enterprise Linux 4.x through 6.x
+		- Red Hat Linux versions 6.x through 7.1
+		- Cobalt Linux (variant of Red Hat)
+		- Debian
+		- Caldera OpenLinux
+
+	- Solaris
+		- versions 2.5.1 through 10
+
+	- Tru64
+
+
+CHANGES
+-------
+You're not required by the license to submit changes back to the source, but I'd
+appreciate portability improvements or enhancements of general applicability.
+You can email new versions or contextual diffs ("diff -c old_file new_file") to
+<tools@occam.com>. Some things to keep in mind if you do this:
+
+	- Formatting
+		- I use tabs for indentation, and sometimes to align code
+			segments for readability. Please do the same.
+		- Please don't use NotePad or some other Windows editor to make
+			changes. Or if you do, get rid of the DOS linefeeds
+			before submitting changes.
+		- Please try to follow the formatting conventions established
+			in the existing code.
+
+	- Readability
+		- Usually, I will trade off efficiency (of running time or of
+			development time) in favor of readability.
+		- Insert meaningful comments where appropriate.
+
+	- Portability
+		- All shell scripts are Bourne-compatible. I won't use shell-
+			specific constructs from bash, ksh, etc.
+		- Don't use OS-specific features, pathnames, etc., unless
+			they're guarded by code checking the OS version, or
+			they're in user-settable variables toward the top of
+			the script.
+
+
+CONTRIBUTORS
+------------
+Leon Towns-von Stauber
+Brett Walker (for the idea behind the -D & -L options)
+Peter Garbes (for the idea behind returning non-zero exit code)
+
+
+Enjoy!
+
+
+Copyright (c) 1998-2015. All rights reserved.
+
+See the LICENSE file distributed with this code for restrictions on its use
+and further distribution.
+Original distribution available at <http://www.occam.com/tools/>.

@@ -1,0 +1,16 @@
+#FIELDS	GLOBAL	no=.	null=X	host	os	prefix=Red Hat Linux 	hw	loc	comment	ssh
+linux1		7.1	Dell PowerEdge 1550	SEA	server,dns	y
+#linux2		6.2	HP NetServer LPr	X	server
+linux3		.SUSE Linux 9	IBM p5 570	NYC	server		y
+
+#FIELDS	GLOBAL	no=.	null=X	host	os	prefix=Mac OS X 	hw	prefix=Apple 	loc	comment	ssh
+mac1		10.2.5	PowerMac G4		2NW	client		y
+mac2		10.4.3	PowerBook G4		mobile	client		y
+
+#FIELDS	GLOBAL	no=.	null=X	host	os	prefix=Solaris 	hw	prefix=Sun 	loc	comment	ssh
+solaris1	7	Ultra 5			DC1	X
+solaris2	8	Enterprise 6500		DC2	server		y
+solaris3	9	.Dell Precision WS	X	X		y
+
+#FIELDS	GLOBAL	no=.	null=X	host	os	prefix=Data OnTAP 	hw	prefix=NetApp 	loc	comment	ssh
+nas1		6.1.2R3	F740			DC1	server		n
